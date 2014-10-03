@@ -12,6 +12,11 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <openssl/ssl.h>
+#include <openssl/rsa.h>
+#include <openssl/x509.h>
+#include <openssl/evp.h>
+
 #ifndef INADDR_NONE
 #define INADDR_NONE     0xffffffff
 #endif  /* INADDR_NONE */
@@ -62,6 +67,10 @@ TCPecho(const char *host, const char *portnum)
 	char	buf[LINELEN+1];		/* buffer for one line of text	*/
 	int	s, n;			/* socket descriptor, read count*/
 	int	outchars, inchars;	/* characters sent and received	*/
+    char certFile[] = "cacert.pem";
+    char keyFile[] = "cakey.pem";
+
+    SSL_library_init();
 
 	s = connectsock(host, portnum);
 
