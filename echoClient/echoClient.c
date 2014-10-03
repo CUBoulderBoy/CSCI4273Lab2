@@ -191,6 +191,10 @@ int connectsock(const char *host, const char *portnum){
         return s;
 }
 
+/*------------------------------------------------------------------------
+ * loadCerts - load certificates into ctx
+ *------------------------------------------------------------------------
+ */
 int loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile){
     // Load the local private key from the location specified by keyFile
     if ( SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM) <= 0 )
