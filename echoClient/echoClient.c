@@ -23,10 +23,10 @@
 
 extern int	errno;
 
-int	TCPecho(const char *host, const char *portnum);
-int	errexit(const char *format, ...);
-int	connectsock(const char *host, const char *portnum);
-int loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile);
+int	    TCPecho(const char *host, const char *portnum);
+int	    errexit(const char *format, ...);
+int	    connectsock(const char *host, const char *portnum);
+void    loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile);
 
 #define	LINELEN		128
 
@@ -34,9 +34,7 @@ int loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile);
  * main - TCP client for ECHO service
  *------------------------------------------------------------------------
  */
-int
-main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]){
 	char	*host = "localhost";	/* host to use if none supplied	*/
 	char	*portnum = "5004";	/* default server port number	*/
 
@@ -80,13 +78,18 @@ int TCPecho(const char *host, const char *portnum) {
     // Intialize CTX state
     OpenSSL_add_all_algorithms();
     SSL_load_error_strings();
-    method = SSLv3_client_method();
+    method = SSLv3_method();
     ctx = SSL_CTX_new(method);
 
+    // Require verification
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_verify_depth(ctx,1);
+
     // Get and verify certficates
-    if ( loadCerts(ctx, certFile, keyFile) == -1){
-        errexit("Certificate error: %s\n", strerror(errno));
-    }
+    loadCerts(ctx, certFile, keyFile);
+
+    // For testing
+    printf("%s\n", "Certificates loaded");
 
     // Start a TCP socket
 	s = connectsock(host, portnum);
@@ -96,14 +99,14 @@ int TCPecho(const char *host, const char *portnum) {
     SSL_set_fd(ssl, s);
 
     // Connect the SSL socket or error out
-    if ( SSL_connect(ssl) == -1 ){
+    if ( SSL_connect(ssl) != 1 ){
         errexit("socket read failed: %s\n", strerror(errno));
     }
 
     // SSL Handshake
     if(SSL_get_peer_certificate(ssl) != NULL){
         if(SSL_get_verify_result(ssl) != X509_V_OK){
-            printf("%s\n", "Client verification with SSL_get_verify_result() failed, exiting");
+            printf("%s\n", "Server verification with SSL_get_verify_result() failed, exiting");
             exit(1);
         }
     }
@@ -195,22 +198,21 @@ int connectsock(const char *host, const char *portnum){
  * loadCerts - load certificates into ctx
  *------------------------------------------------------------------------
  */
-int loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile){
+void loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile){
     // Load the local private key from the location specified by keyFile
     if ( SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM) <= 0 )
     {
-        return -1;
+        exit(1);
     }
 
     // Load the CA certificate for verification
     if (SSL_CTX_load_verify_locations(ctx, certFile, NULL) <= 0){
-        return -1;
+        exit(1);
     }
 
     // Verify the private key, if incorrect return -1 as error
     if ( !SSL_CTX_check_private_key(ctx) )
     {
-        return -1;
+        exit(1);
     }
-    return 1;
 }

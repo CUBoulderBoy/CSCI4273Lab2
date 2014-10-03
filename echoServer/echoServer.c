@@ -66,8 +66,12 @@ main(int argc, char *argv[])
     // Intialize CTX state
     OpenSSL_add_all_algorithms();
     SSL_load_error_strings();
-    method = SSLv3_server_method();
+    method = SSLv3_method();
     ctx = SSL_CTX_new(method);
+
+    // Require verification
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_verify_depth(ctx,1);
 
     // Get and verify certficates
     if ( loadCerts(ctx, certFile, keyFile) == -1){
@@ -216,18 +220,19 @@ int loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile){
     // Load the local private key from the location specified by keyFile
     if ( SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM) <= 0 )
     {
-        return -1;
+        exit(1);
     }
 
-    // Load the CA certificate for verification
-    if (SSL_CTX_load_verify_locations(ctx, certFile, NULL) <= 0){
-        return -1;
+    // Load the server certificate
+    if (SSL_CTX_certificate_file(ctx, certFile, certFile) <= 0){
+        exit(1);
     }
 
     // Verify the private key, if incorrect return -1 as error
     if ( !SSL_CTX_check_private_key(ctx) )
     {
-        return -1;
+        exit(1);
     }
+
     return 1;
 }
