@@ -1,21 +1,20 @@
-#include <sys/types.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <sys/socket.h>
+#include <sys/types.h>
 
 #include <sys/errno.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#include <stdarg.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-
 #include <openssl/ssl.h>
-#include <openssl/rsa.h>
+#include <openssl/err.h>
+#include <openssl/crypto.h>
 #include <openssl/x509.h>
-#include <openssl/evp.h>
+#include <openssl/pem.h>
 
 #ifndef INADDR_NONE
 #define INADDR_NONE     0xffffffff
@@ -26,17 +25,20 @@ extern int	errno;
 int	    TCPecho(const char *host, const char *portnum);
 int	    errexit(const char *format, ...);
 int	    connectsock(const char *host, const char *portnum);
-void    loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile);
+static int pem_passwd_cb(char *buf, int size, int rwflag, void *userdata);
 
 #define	LINELEN		128
+#define CACERT      "cacert.pem"
+#define CL_PRIV     "cakey.pem"
+#define PASSWORD    "netsys_2014"
 
 /*------------------------------------------------------------------------
  * main - TCP client for ECHO service
  *------------------------------------------------------------------------
  */
 int main(int argc, char *argv[]){
-	char	*host = "localhost";	/* host to use if none supplied	*/
-	char	*portnum = "5004";	/* default server port number	*/
+	char	*host = "localhost";	  /* host to use if none supplied	*/
+	char	*portnum = "5004";       /* default server port number	*/
 
 	switch (argc) {
 	case 1:
@@ -61,82 +63,106 @@ int main(int argc, char *argv[]){
  *------------------------------------------------------------------------
  */
 int TCPecho(const char *host, const char *portnum) {
-	char	buf[LINELEN+1];		/* buffer for one line of text	*/
+	char buf[LINELEN+1];		/* buffer for one line of text	*/
+    char rebuf[LINELEN+1];
 	int	s, n;			/* socket descriptor, read count*/
-	int	outchars, inchars;	/* characters sent and received	*/
-    
-    // Added variables for SSL connection
-    char certFile[] = "cacert.pem";
-    char keyFile[] = "cakey.pem";
-    SSL_CTX *ctx;
+    char *pass = "netsys_2014";
+    char *cl_priv = "cakey.pem";
+    char *ca_cert = "cacert.pem";
+    char *cypher = "AES128-SHA";
+
+    // SSL Variables
     SSL *ssl;
+    SSL_CTX *ctx;
     SSL_METHOD *method;
 
-    // Initialize SSL library
+    // Initialize SSL library and crypto suite
     SSL_library_init();
+    SSL_load_error_strings();
 
     // Intialize CTX state
-    OpenSSL_add_all_algorithms();
-    SSL_load_error_strings();
-    method = SSLv3_method();
+    method = SSLv23_method();
     ctx = SSL_CTX_new(method);
-
-    // Require verification
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
-    SSL_CTX_set_verify_depth(ctx,1);
-
-    // Get and verify certficates
-    loadCerts(ctx, certFile, keyFile);
-
-    // For testing
-    printf("%s\n", "Certificates loaded");
-
-    // Start a TCP socket
-	s = connectsock(host, portnum);
-
-    // Initialize an ssl connection state
-    ssl = SSL_new(ctx);
-    SSL_set_fd(ssl, s);
-
-    // Connect the SSL socket or error out
-    if ( SSL_connect(ssl) != 1 ){
-        errexit("socket read failed: %s\n", strerror(errno));
+    
+    if (SSL_CTX_set_cipher_list(ctx, cypher) <= 0) {
+        printf("Error setting the cipher list.\n");
+        exit(0);
     }
+    
+    // Set password callback
+    SSL_CTX_set_default_passwd_cb_userdata(ctx, pass);
 
-    // SSL Handshake
-    if(SSL_get_peer_certificate(ssl) != NULL){
-        if(SSL_get_verify_result(ssl) != X509_V_OK){
-            printf("%s\n", "Server verification with SSL_get_verify_result() failed, exiting");
-            exit(1);
-        }
-    }
-    else{
-        printf("%s\n", "Server certificate was not presented, exiting");
+    // Load the local private key from the location specified by keyFile
+    if ( SSL_CTX_use_PrivateKey_file(ctx, cl_priv, SSL_FILETYPE_PEM) <= 0 ){
         exit(1);
     }
 
-	while (fgets(buf, sizeof(buf), stdin)) {
-		buf[LINELEN] = '\0';	/* insure line null-terminated	*/
-		outchars = strlen(buf);
+    /*Make sure the key and certificate file match*/
+    if (SSL_CTX_check_private_key(ctx) == 0) {
+        printf("Private key does not match the certificate public key\n");
+        exit(0);
+    }
+
+    // Load the CA certificate for verification
+    if (SSL_CTX_load_verify_locations(ctx, ca_cert, NULL) <= 0){
+        exit(0);
+    }   
+
+    // Require verification
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+
+    // Ensure ctx not null
+    if ( ctx == NULL ){
+        exit(0);
+    }
+
+    // Initialize an ssl connection state
+    ssl = SSL_new(ctx);
+
+    // Start a TCP socket
+    s = connectsock(host, portnum);
+
+    // Map ssl to socket
+    SSL_set_fd(ssl, s);
+
+    // Connect the SSL socket or error out
+    if ( SSL_connect(ssl) < 1 ){
+        errexit("socket read failed: %s\n", strerror(errno));
+        exit(1);
+    }
+
+    printf("SSL connection on socket %x,Version: %s, Cipher: %s\n",
+       s,
+       SSL_get_version(ssl),
+       SSL_get_cipher(ssl));
+
+	/*while (1) {
+        // Read from command line
+        fgets(buf, sizeof(buf), stdin);
+
+        // Ensure buffer is null terminated
+		buf[LINELEN] = '\0';
 
         // Write the text from the console the server via SSL
-        SSL_write(ssl, buf, outchars); 
+        SSL_write(ssl, buf, sizeof(buf));
 
-		// Read the reply back
-		for (inchars = 0; inchars < outchars; inchars+=n ) {
-            // Read and decrypt reply via SSL connection
-            n = SSL_read(ssl, &buf[inchars], outchars - inchars);
+        // Clear send buffer
+        memset(&buf, 0, sizeof(buf));
+
+        // Read and decrypt reply via SSL connection
+        n = SSL_read(ssl, &rebuf, sizeof(rebuf));
 			
-            // If no characters read, then error out
-            if (n < 0)
-				errexit("socket read failed: %s\n", strerror(errno));
-		}
-        // Print the echo to the console
-		fputs(buf, stdout);
+        // If no characters read, then error out
+        if (n < 0)
+			errexit("socket read failed: %s\n", strerror(errno));
 
-        // Free the SSL connection
-        SSL_free(ssl); 
-	}
+        // Print the echo to the console
+		fputs(rebuf, stdout);
+
+        // Clear recieve buffer
+        memset(&rebuf, 0, sizeof(rebuf));
+	}*/
+    return 0;
 }
 
 /*------------------------------------------------------------------------
@@ -195,24 +221,11 @@ int connectsock(const char *host, const char *portnum){
 }
 
 /*------------------------------------------------------------------------
- * loadCerts - load certificates into ctx
+ * pem_passwd_cb - password callback
  *------------------------------------------------------------------------
  */
-void loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile){
-    // Load the local private key from the location specified by keyFile
-    if ( SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM) <= 0 )
-    {
-        exit(1);
-    }
-
-    // Load the CA certificate for verification
-    if (SSL_CTX_load_verify_locations(ctx, certFile, NULL) <= 0){
-        exit(1);
-    }
-
-    // Verify the private key, if incorrect return -1 as error
-    if ( !SSL_CTX_check_private_key(ctx) )
-    {
-        exit(1);
-    }
+static int pem_passwd_cb(char *buf, int size, int rwflag, void *password){
+  strncpy(buf, (char *)(password), size);
+  buf[size - 1] = '\0';
+  return(strlen(buf));
 }

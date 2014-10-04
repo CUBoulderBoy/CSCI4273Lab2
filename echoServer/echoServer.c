@@ -1,53 +1,54 @@
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <sys/errno.h>
-#include <netinet/in.h>
-#include <netdb.h>
-
-#include <stdarg.h>
-#include <unistd.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+
+#include <sys/errno.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 
 #include <openssl/ssl.h>
-#include <openssl/rsa.h>
+#include <openssl/err.h>
+#include <openssl/crypto.h>
 #include <openssl/x509.h>
-#include <openssl/evp.h>
+#include <openssl/pem.h>
 
-#define	QLEN		  32	/* maximum connection queue length	*/
+#define	QLEN		32	/* maximum connection queue length	*/
 #define	BUFSIZE		4096
+#define SERVERCERT  "server.cert"
+#define SERVERKEY   "server_priv.key"
+#define PASSWORD    "netsys_2014"
 
 extern int	errno;
 int		errexit(const char *format, ...);
 int		passivesock(const char *portnum, int qlen);
 int		echo(SSL* fd);
-int     loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile);
+static int pem_passwd_cb(char *buf, int size, int rwflag, void *userdata);
 
 /*------------------------------------------------------------------------
  * main - Concurrent TCP server for ECHO service
  *------------------------------------------------------------------------
  */
-int
-main(int argc, char *argv[])
-{
-	char	*portnum = "5004";	/* Standard server port number	*/
-	struct sockaddr_in fsin;	/* the from address of a client	*/
-	int	msock;			/* master server socket		*/
-	fd_set	rfds;			/* read file descriptor set	*/
-	fd_set	afds;			/* active file descriptor set	*/
-	unsigned int	alen;		/* from-address length		*/
-	int	fd, nfds;
-
-    // Added variables for SSL connection
-    char certFile[] = "server.cert";
-    char keyFile[] = "server_priv.key";
-    SSL_CTX *ctx;
+int main(int argc, char *argv[]){
+	char *portnum = "5004";	               // Standard server port number
+	struct sockaddr_in fsin;	               // the from address of a client
+	int msock;			                       // master server socket
+	fd_set rfds;			                   // read file descriptor set
+	fd_set afds;			                   // active file descriptor set
+	unsigned int alen;		                   // from-address length
+	int fd, nfds;                              // For file desriptor table
+    //map<int, SSL*> ssl_connections;            // Map to store chat messages
+    char *pass = "netsys_2014";
+    char *server_key = "server_priv.key";
+    char *server_cert = "server.cert";
+    char *cypher = "AES128-SHA";
+    
+    // SSL Variables
     SSL *ssl;
+    SSL_CTX *ctx;
     SSL_METHOD *method;
 	
 	switch (argc) {
@@ -60,27 +61,61 @@ main(int argc, char *argv[])
 		errexit("usage: TCPmechod [port]\n");
 	}
 
-    // Initialize SSL library
+    // Initialize SSL library and crypto suite
     SSL_library_init();
+    SSL_load_error_strings();
 
     // Intialize CTX state
-    OpenSSL_add_all_algorithms();
-    SSL_load_error_strings();
-    method = SSLv3_method();
+    method = SSLv23_method();
     ctx = SSL_CTX_new(method);
 
-    // Require verification
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
-    SSL_CTX_set_verify_depth(ctx,1);
+    if (SSL_CTX_set_cipher_list(ctx, cypher) <= 0) {
+        printf("Error setting the cipher list.\n");
+        fflush(stdout);
+        exit(0);
+    }
+    
+    // Set password callback
+    //SSL_CTX_set_default_passwd_cb_userdata(ctx, pass);
+    //SSL_CTX_set_default_passwd_cb(ctx, pem_passwd_cb);
 
-    // Get and verify certficates
-    if ( loadCerts(ctx, certFile, keyFile) == -1){
-        errexit("Certificate error: %s\n", strerror(errno));
+    // Load the server certificate
+    if (SSL_CTX_use_certificate_file(ctx, server_cert, SSL_FILETYPE_PEM) != 1){
+        exit(1);
+    }
+
+    // Load the local private key from the location specified by keyFile
+    if ( SSL_CTX_use_PrivateKey_file(ctx, server_key, SSL_FILETYPE_PEM) != 1 ){
+        exit(1);
     }
 
 	msock = passivesock(portnum, QLEN);
 
-	nfds = getdtablesize();
+    listen(msock, 5);
+    int ssock = accept(msock, (struct sockaddr *)&fsin, &alen);
+    close(msock);
+
+    // Ensure ctx not null
+    if ( ctx == NULL ){
+        exit(0);
+    }
+
+    // Initialize an ssl connection state
+    ssl = SSL_new(ctx);
+    SSL_set_fd(ssl, ssock);
+
+    // Connect the SSL socket or error out
+    if ( SSL_accept(ssl) == -1 ){
+        errexit("socket read failed: %s\n", strerror(errno));
+    }
+
+    while (1){
+        // Call echo with SSL port
+        echo(ssl);
+    }
+
+
+	/*nfds = getdtablesize();
 	FD_ZERO(&afds);
 	FD_SET(msock, &afds);
 
@@ -95,58 +130,58 @@ main(int argc, char *argv[])
 
             // Accept TCP Connection
 			alen = sizeof(fsin);
-			ssock = accept(msock, (struct sockaddr *)&fsin,
-				&alen);
-			if (ssock < 0)
-				errexit("accept: %s\n",
-					strerror(errno));
+			ssock = accept(msock, (struct sockaddr *)&fsin, &alen);
+			if (ssock < 0){
+				errexit("accept: %s\n", strerror(errno));
+            }
             
             // Initialize an ssl connection state
-            ssl = SSL_new(ctx);
+            SSL *ssl = SSL_new(ctx);
             SSL_set_fd(ssl, ssock);
 
             // Connect the SSL socket or error out
-            if ( SSL_connect(ssl) == -1 ){
+            if ( SSL_accept(ssl) == -1 ){
                 errexit("socket read failed: %s\n", strerror(errno));
             }
 
-            // SSL Handshake
-            if(SSL_get_peer_certificate(ssl) != NULL){
-                if(SSL_get_verify_result(ssl) != X509_V_OK){
-                    printf("%s\n", "Client verification with SSL_get_verify_result() failed, exiting");
-                    continue;
-                }
-            }
-            else{
-                printf("%s\n", "Client certificate was not presented, exiting");
-                continue;
-            }
+            // Set socket to active file descriptor
+            FD_SET(ssock, &afds);
 
-			SSL_set_fd(ssl, &afds);
+            // Store sll in map
+            ssl_connections[ssock] = ssl;
 		}
 		for (fd=0; fd<nfds; ++fd){
 			if (fd != msock && FD_ISSET(fd, &rfds)){
-				if (echo(fd) == 0) {
-					(void) SSL_shutdown(fd);
-					SSL_fd(fd, &afds);
+				if (echo(ssl_connections[fd]) == 0) {
+					// Store for use
+                    SSL *ssl = ssl_connections[fd];
+
+                    // Close SSL and TCP connections
+                    (void) SSL_shutdown(ssl);
+                    (void) close(fd);
+                    SSL_free(ssl);
+
+                    // Remove from tracking structures
+                    FD_CLR(fd, &afds);
+                    ssl_connections.erase(fd);
 				}
             }
         }
-	}
+	}*/
 }
 
 /*------------------------------------------------------------------------
  * echo - echo one buffer of data, returning byte count
  *------------------------------------------------------------------------
  */
-int echo(SSL* fd) {
-	char	buf[BUFSIZ];
-	int	cc;
+int echo(SSL* ssl) {
+	char	buf[BUFSIZE];
+	int	    cc;
 
-	cc = SSL_read(fd, buf, sizeof buf);
+	cc = SSL_read(ssl, buf, sizeof(buf) );
 	if (cc < 0)
 		errexit("echo read: %s\n", strerror(errno));
-	if (cc && SSL_write(fd, buf, cc) < 0)
+	if (cc && SSL_write(ssl, buf, cc) < 0)
 		errexit("echo write: %s\n", strerror(errno));
 	return cc;
 }
@@ -199,7 +234,7 @@ int passivesock(const char *portnum, int qlen){
         if (bind(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
             errexit("can't bind: %s\n", strerror(errno));
         else {
-            int socklen = sizeof(sin);
+            socklen_t socklen = sizeof(sin);
 
             if (getsockname(s, (struct sockaddr *)&sin, &socklen) < 0)
                     errexit("getsockname: %s\n", strerror(errno));
@@ -213,26 +248,11 @@ int passivesock(const char *portnum, int qlen){
 }
 
 /*------------------------------------------------------------------------
- * loadCerts - load certificates into ctx
+ * pem_passwd_cb - password callback
  *------------------------------------------------------------------------
  */
-int loadCerts(SSL_CTX* ctx, char* certFile, char* keyFile){
-    // Load the local private key from the location specified by keyFile
-    if ( SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM) <= 0 )
-    {
-        exit(1);
-    }
-
-    // Load the server certificate
-    if (SSL_CTX_certificate_file(ctx, certFile, certFile) <= 0){
-        exit(1);
-    }
-
-    // Verify the private key, if incorrect return -1 as error
-    if ( !SSL_CTX_check_private_key(ctx) )
-    {
-        exit(1);
-    }
-
-    return 1;
+static int pem_passwd_cb(char *buf, int size, int rwflag, void *password){
+  strncpy(buf, (char *)(password), size);
+  buf[size - 1] = '\0';
+  return(strlen(buf));
 }

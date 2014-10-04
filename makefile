@@ -11,7 +11,7 @@ all: $(EXE)
 client: $(CLIENT)
 server: $(SERVER)
 
-CFLG=-O3 -Wall
+CFLG=-O3 -Wall -w
 LIBS=-lcrypto -lssl
 CLEAN=rm -f $(EXE) *.o *.a
 
