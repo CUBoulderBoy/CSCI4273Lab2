@@ -131,12 +131,7 @@ int TCPecho(const char *host, const char *portnum) {
         exit(1);
     }
 
-    printf("SSL connection on socket %x,Version: %s, Cipher: %s\n",
-       s,
-       SSL_get_version(ssl),
-       SSL_get_cipher(ssl));
-
-	/*while (1) {
+	while (1) {
         // Read from command line
         fgets(buf, sizeof(buf), stdin);
 
@@ -161,8 +156,7 @@ int TCPecho(const char *host, const char *portnum) {
 
         // Clear recieve buffer
         memset(&rebuf, 0, sizeof(rebuf));
-	}*/
-    return 0;
+	}
 }
 
 /*------------------------------------------------------------------------
