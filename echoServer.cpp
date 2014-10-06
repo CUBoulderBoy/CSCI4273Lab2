@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <stdarg.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -11,6 +13,10 @@
 #include <netdb.h>
 
 #include <openssl/ssl.h>
+
+#include <map>
+
+using namespace std;
 
 #define	QLEN		32	/* maximum connection queue length	*/
 #define	BUFSIZE		4096
@@ -35,7 +41,8 @@ int main(int argc, char *argv[]){
 	fd_set afds;			                   // active file descriptor set
 	unsigned int alen;		                   // from-address length
 	int fd, nfds;                              // For file desriptor table
-    //map<int, SSL*> ssl_connections;            // Map to store chat messages
+    SSL *ssl_connections[50000];
+    //map<int, SSL *> ssl_connections;            // Map to store chat messages
     char *pass = "netsys_2014";
     char *server_key = "server_priv.key";
     char *server_cert = "server.cert";
@@ -43,8 +50,7 @@ int main(int argc, char *argv[]){
     // SSL Variables
     SSL *ssl;
     SSL_CTX *ctx;
-    SSL_METHOD *method;
-	
+
 	switch (argc) {
 	case	1:
 		break;
@@ -60,7 +66,7 @@ int main(int argc, char *argv[]){
     SSL_load_error_strings();
 
     // Intialize CTX state
-    method = SSLv3_server_method();
+    const SSL_METHOD *method = SSLv3_server_method();
     ctx = SSL_CTX_new(method);
 
     // Load the server certificate
@@ -75,12 +81,12 @@ int main(int argc, char *argv[]){
 
 	msock = passivesock(portnum, QLEN);
 
-    int ssock = accept(msock, (struct sockaddr *)&fsin, &alen);
-
     // Ensure ctx not null
     if ( ctx == NULL ){
         exit(0);
     }
+
+    /*int ssock = accept(msock, (struct sockaddr *)&fsin, &alen);
 
     // Initialize an ssl connection state
     ssl = SSL_new(ctx);
@@ -94,10 +100,10 @@ int main(int argc, char *argv[]){
     while (1){
         // Call echo with SSL port
         echo(ssl);
-    }
+    }*/
 
 
-	/*nfds = getdtablesize();
+	nfds = getdtablesize();
 	FD_ZERO(&afds);
 	FD_SET(msock, &afds);
 
@@ -139,17 +145,17 @@ int main(int argc, char *argv[]){
                     SSL *ssl = ssl_connections[fd];
 
                     // Close SSL and TCP connections
-                    (void) SSL_shutdown(ssl);
-                    (void) close(fd);
+                    SSL_shutdown(ssl);
+                    close(fd);
                     SSL_free(ssl);
 
                     // Remove from tracking structures
                     FD_CLR(fd, &afds);
-                    ssl_connections.erase(fd);
+                    ssl_connections[fd] = 0;
 				}
             }
         }
-	}*/
+	}
 }
 
 /*------------------------------------------------------------------------

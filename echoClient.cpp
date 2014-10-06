@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -11,6 +12,8 @@
 #include <netdb.h>
 
 #include <openssl/ssl.h>
+
+using namespace std;
 
 #ifndef INADDR_NONE
 #define INADDR_NONE     0xffffffff
@@ -69,14 +72,13 @@ int TCPecho(const char *host, const char *portnum) {
     // SSL Variables
     SSL *ssl;
     SSL_CTX *ctx;
-    SSL_METHOD *method;
 
     // Initialize SSL library and crypto suite
     SSL_library_init();
     SSL_load_error_strings();
 
     // Intialize CTX state
-    method = SSLv3_client_method();
+    const SSL_METHOD *method = SSLv3_client_method();
     ctx = SSL_CTX_new(method);
     
     // Set password callback
