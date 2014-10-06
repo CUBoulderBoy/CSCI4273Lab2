@@ -83,13 +83,13 @@ int TCPecho(const char *host, const char *portnum) {
     SSL_CTX_set_default_passwd_cb_userdata(ctx, pass);
 
         // Load the local private key from the location specified by keyFile
-    if ( SSL_CTX_use_PrivateKey_file(ctx, cl_priv, SSL_FILETYPE_PEM) != 0 ){
+    if ( SSL_CTX_use_PrivateKey_file(ctx, cl_priv, SSL_FILETYPE_PEM) != 1 ){
         printf("Unable to load privatekey file\n");
         exit(0);
     }
 
     // Load the CA certificate for verification
-    if (SSL_CTX_load_verify_locations(ctx, ca_cert, NULL) != 0){
+    if (SSL_CTX_load_verify_locations(ctx, ca_cert, NULL) != 1){
         printf("Unable to load ca cert file\n");
         exit(0);
     }
