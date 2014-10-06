@@ -2,9 +2,9 @@
 # Christopher Jordan
 # CSCI 4273 Fall 2014
 
-EXE=echoClient/echoClient echoServer/echoServer
-SERVER=echoServer/echoServer
-CLIENT=echoClient/echoClient
+EXE=echoClient echoServer
+SERVER=echoServer
+CLIENT=echoClient
 
 # Main target
 all: $(EXE)
@@ -22,11 +22,11 @@ CLEAN=rm -f $(EXE) *.o *.a
 	g++ -c $(CFLG) $<
 
 #  Link
-echoServer/echoServer:echoServer/echoServer.o
+echoServer:echoServer.o
 	gcc -O3 -o $@ $^ $(LIBS)
 
 #  Link
-echoClient/echoClient:echoClient/echoClient.o
+echoClient:echoClient.o
 	gcc -O3 -o $@ $^ $(LIBS)
 
 #  Clean

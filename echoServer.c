@@ -4,17 +4,13 @@
 
 #include <sys/socket.h>
 #include <sys/types.h>
-
 #include <sys/errno.h>
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
 #include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/crypto.h>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
 
 #define	QLEN		32	/* maximum connection queue length	*/
 #define	BUFSIZE		4096
@@ -26,7 +22,6 @@ extern int	errno;
 int		errexit(const char *format, ...);
 int		passivesock(const char *portnum, int qlen);
 int		echo(SSL* fd);
-static int pem_passwd_cb(char *buf, int size, int rwflag, void *userdata);
 
 /*------------------------------------------------------------------------
  * main - Concurrent TCP server for ECHO service
@@ -44,7 +39,6 @@ int main(int argc, char *argv[]){
     char *pass = "netsys_2014";
     char *server_key = "server_priv.key";
     char *server_cert = "server.cert";
-    char *cypher = "AES128-SHA";
     
     // SSL Variables
     SSL *ssl;
@@ -66,18 +60,8 @@ int main(int argc, char *argv[]){
     SSL_load_error_strings();
 
     // Intialize CTX state
-    method = SSLv23_method();
+    method = SSLv3_server_method();
     ctx = SSL_CTX_new(method);
-
-    if (SSL_CTX_set_cipher_list(ctx, cypher) <= 0) {
-        printf("Error setting the cipher list.\n");
-        fflush(stdout);
-        exit(0);
-    }
-    
-    // Set password callback
-    //SSL_CTX_set_default_passwd_cb_userdata(ctx, pass);
-    //SSL_CTX_set_default_passwd_cb(ctx, pem_passwd_cb);
 
     // Load the server certificate
     if (SSL_CTX_use_certificate_file(ctx, server_cert, SSL_FILETYPE_PEM) != 1){
@@ -91,9 +75,7 @@ int main(int argc, char *argv[]){
 
 	msock = passivesock(portnum, QLEN);
 
-    listen(msock, 5);
     int ssock = accept(msock, (struct sockaddr *)&fsin, &alen);
-    close(msock);
 
     // Ensure ctx not null
     if ( ctx == NULL ){
@@ -245,14 +227,4 @@ int passivesock(const char *portnum, int qlen){
     if (listen(s, qlen) < 0)
         errexit("can't listen on %s port: %s\n", portnum, strerror(errno));
     return s;
-}
-
-/*------------------------------------------------------------------------
- * pem_passwd_cb - password callback
- *------------------------------------------------------------------------
- */
-static int pem_passwd_cb(char *buf, int size, int rwflag, void *password){
-  strncpy(buf, (char *)(password), size);
-  buf[size - 1] = '\0';
-  return(strlen(buf));
 }

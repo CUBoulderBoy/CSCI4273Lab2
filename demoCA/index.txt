@@ -1,1 +1,1 @@
-V	151003040815Z		01	unknown	/C=US/ST=Colorado/O=CSCI4273/OU=FALL2014/CN=CHJO8314/emailAddress=christopher.james.jordan@gmail.com
+V	151006222157Z		01	unknown	/C=US/ST=Colorado/O=CU Boulder/OU=CSCI 4273/CN=Fall 2014/emailAddress=christopher.james.jordan@gmail.com

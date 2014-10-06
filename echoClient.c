@@ -4,17 +4,13 @@
 
 #include <sys/socket.h>
 #include <sys/types.h>
-
 #include <sys/errno.h>
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
 #include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/crypto.h>
-#include <openssl/x509.h>
-#include <openssl/pem.h>
 
 #ifndef INADDR_NONE
 #define INADDR_NONE     0xffffffff
@@ -69,7 +65,6 @@ int TCPecho(const char *host, const char *portnum) {
     char *pass = "netsys_2014";
     char *cl_priv = "cakey.pem";
     char *ca_cert = "cacert.pem";
-    char *cypher = "AES128-SHA";
 
     // SSL Variables
     SSL *ssl;
@@ -81,32 +76,23 @@ int TCPecho(const char *host, const char *portnum) {
     SSL_load_error_strings();
 
     // Intialize CTX state
-    method = SSLv23_method();
+    method = SSLv3_client_method();
     ctx = SSL_CTX_new(method);
-    
-    if (SSL_CTX_set_cipher_list(ctx, cypher) <= 0) {
-        printf("Error setting the cipher list.\n");
-        exit(0);
-    }
     
     // Set password callback
     SSL_CTX_set_default_passwd_cb_userdata(ctx, pass);
 
-    // Load the local private key from the location specified by keyFile
-    if ( SSL_CTX_use_PrivateKey_file(ctx, cl_priv, SSL_FILETYPE_PEM) <= 0 ){
-        exit(1);
-    }
-
-    /*Make sure the key and certificate file match*/
-    if (SSL_CTX_check_private_key(ctx) == 0) {
-        printf("Private key does not match the certificate public key\n");
+        // Load the local private key from the location specified by keyFile
+    if ( SSL_CTX_use_PrivateKey_file(ctx, cl_priv, SSL_FILETYPE_PEM) != 0 ){
+        printf("Unable to load privatekey file\n");
         exit(0);
     }
 
     // Load the CA certificate for verification
-    if (SSL_CTX_load_verify_locations(ctx, ca_cert, NULL) <= 0){
+    if (SSL_CTX_load_verify_locations(ctx, ca_cert, NULL) != 0){
+        printf("Unable to load ca cert file\n");
         exit(0);
-    }   
+    }
 
     // Require verification
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
