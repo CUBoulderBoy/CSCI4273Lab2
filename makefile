@@ -23,11 +23,11 @@ CLEAN=rm -f $(EXE) *.o *.a
 
 #  Link
 echoServer:echoServer.o
-	gcc -O3 -o $@ $^ $(LIBS)
+	g++ -O3 -o $@ $^ $(LIBS)
 
 #  Link
 echoClient:echoClient.o
-	gcc -O3 -o $@ $^ $(LIBS)
+	g++ -O3 -o $@ $^ $(LIBS)
 
 #  Clean
 clean:

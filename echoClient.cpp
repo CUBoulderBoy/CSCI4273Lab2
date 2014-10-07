@@ -1,6 +1,18 @@
+/* EchoClient Program
+ *
+ * CSCI 4273 Fall 2014
+ *
+ * Programming Assignment 2: Echo Client Program with SSl
+ *
+ * Author: Christopher Jordan
+ *
+ * Updated: 10/06/2014
+ */
+
+#include <string>
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
 
 #include <sys/socket.h>
@@ -20,16 +32,11 @@ using namespace std;
 #endif  /* INADDR_NONE */
 
 extern int	errno;
-
 int	    TCPecho(const char *host, const char *portnum);
 int	    errexit(const char *format, ...);
 int	    connectsock(const char *host, const char *portnum);
-static int pem_passwd_cb(char *buf, int size, int rwflag, void *userdata);
 
 #define	LINELEN		128
-#define CACERT      "cacert.pem"
-#define CL_PRIV     "cakey.pem"
-#define PASSWORD    "netsys_2014"
 
 /*------------------------------------------------------------------------
  * main - TCP client for ECHO service
@@ -65,7 +72,12 @@ int TCPecho(const char *host, const char *portnum) {
 	char buf[LINELEN+1];		/* buffer for one line of text	*/
     char rebuf[LINELEN+1];
 	int	s, n;			/* socket descriptor, read count*/
-    char *pass = "netsys_2014";
+    
+    // Password variables
+    char pass_in[LINELEN+1];
+    string pass_str;
+
+    // File locations for certicate and key
     char *cl_priv = "cakey.pem";
     char *ca_cert = "cacert.pem";
 
@@ -80,11 +92,30 @@ int TCPecho(const char *host, const char *portnum) {
     // Intialize CTX state
     const SSL_METHOD *method = SSLv3_client_method();
     ctx = SSL_CTX_new(method);
+
+    // Request private key password from user
+    printf("Please enter the private key decryption password\n");
+
+    // Read from command line
+    fgets(pass_in, sizeof(pass_in), stdin);
+
+    // Convert password to string then store back
+    pass_str = "";
+    for (int i = 0; i <= LINELEN; i++){
+        if ( pass_in[i] != '\0' && pass_in[i] != '\n' && pass_in[i] != ' '){
+            pass_str += pass_in[i];
+        }
+        else{
+            break;
+        }
+    }
+    pass_str += '\0';
+    char *pass = strncpy(buf, pass_str.c_str(), sizeof(buf));
     
     // Set password callback
     SSL_CTX_set_default_passwd_cb_userdata(ctx, pass);
 
-        // Load the local private key from the location specified by keyFile
+    // Load the local private key from the location specified by keyFile
     if ( SSL_CTX_use_PrivateKey_file(ctx, cl_priv, SSL_FILETYPE_PEM) != 1 ){
         printf("Unable to load privatekey file\n");
         exit(0);

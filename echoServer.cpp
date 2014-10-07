@@ -1,3 +1,14 @@
+/* EchoServer Program
+ *
+ * CSCI 4273 Fall 2014
+ *
+ * Programming Assignment 2: Echo Server Program with SSl
+ *
+ * Author: Christopher Jordan
+ *
+ * Updated: 10/06/2014
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,9 +31,7 @@ using namespace std;
 
 #define	QLEN		32	/* maximum connection queue length	*/
 #define	BUFSIZE		4096
-#define SERVERCERT  "server.cert"
-#define SERVERKEY   "server_priv.key"
-#define PASSWORD    "netsys_2014"
+#define PORTMAX     50000
 
 extern int	errno;
 int		errexit(const char *format, ...);
@@ -37,13 +46,17 @@ int main(int argc, char *argv[]){
 	char *portnum = "5004";	               // Standard server port number
 	struct sockaddr_in fsin;	               // the from address of a client
 	int msock;			                       // master server socket
-	fd_set rfds;			                   // read file descriptor set
+	unsigned int alen;                         // from-address length
+
+    // File set variables
+    fd_set rfds;			                   // read file descriptor set
 	fd_set afds;			                   // active file descriptor set
-	unsigned int alen;		                   // from-address length
 	int fd, nfds;                              // For file desriptor table
-    SSL *ssl_connections[50000];
-    //map<int, SSL *> ssl_connections;            // Map to store chat messages
-    char *pass = "netsys_2014";
+    
+    // Array to track clients
+    SSL *ssl_connections[PORTMAX];
+
+    // Server file locations
     char *server_key = "server_priv.key";
     char *server_cert = "server.cert";
     
@@ -71,14 +84,17 @@ int main(int argc, char *argv[]){
 
     // Load the server certificate
     if (SSL_CTX_use_certificate_file(ctx, server_cert, SSL_FILETYPE_PEM) != 1){
+        printf("Unable to server ca cert file\n");
         exit(1);
     }
 
     // Load the local private key from the location specified by keyFile
     if ( SSL_CTX_use_PrivateKey_file(ctx, server_key, SSL_FILETYPE_PEM) != 1 ){
+        printf("Unable to load privatekey file\n");
         exit(1);
     }
 
+    // Create TCP socket for usage
 	msock = passivesock(portnum, QLEN);
 
     // Ensure ctx not null
@@ -86,23 +102,7 @@ int main(int argc, char *argv[]){
         exit(0);
     }
 
-    /*int ssock = accept(msock, (struct sockaddr *)&fsin, &alen);
-
-    // Initialize an ssl connection state
-    ssl = SSL_new(ctx);
-    SSL_set_fd(ssl, ssock);
-
-    // Connect the SSL socket or error out
-    if ( SSL_accept(ssl) == -1 ){
-        errexit("socket read failed: %s\n", strerror(errno));
-    }
-
-    while (1){
-        // Call echo with SSL port
-        echo(ssl);
-    }*/
-
-
+    // Initialize file descriptor table
 	nfds = getdtablesize();
 	FD_ZERO(&afds);
 	FD_SET(msock, &afds);

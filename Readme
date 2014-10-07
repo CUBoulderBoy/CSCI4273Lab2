@@ -1,7 +1,18 @@
+/* EchoClient and EchoServer Program with SSL
+ *
+ * CSCI 4273 Fall 2014
+ *
+ * Programming Assignment 2: Echo Server Program with SSl
+ *
+ * Author: Christopher Jordan
+ *
+ * Updated: 10/06/2014
+ */
+
 There are two programs in this directory. They illustrate the use of TCP and
 select() system call.
 
-The echoServer.c contains an ECHO server program that implements an ECHO
+The echoServer.cpp contains an ECHO server program that implements an ECHO
 service. After establishing connections with clients, an ECHO server receives
 byte strings from them and echos them back. The ECHO server can service
 multiple clients concurrently. It uses port number 5004 as the default port.
@@ -12,17 +23,20 @@ standard output.
 
 USAGE: echoServer [port]
 
-The echoClient.c contains an ECHO client program. An ECHO client first
-establishes a connection with the ECHO server, and then repeatedly reads 
-character strings from standard input, sends them to the ECHO server, receives
-them from the ECHO server, and then prints them on the standard output.
+The echoClient.cpp contains an ECHO client program. An ECHO client first
+establishes a connection with the ECHO server, the requests and waits for the 
+private key decryption password. If the correct key is provided the program
+then repeatedly reads character strings from standard input, sends them to 
+the ECHO server via SSL, receives them from the ECHO server via SSL, and
+then prints them on the standard output.
 
 USAGE: echoClient [port [host]]
 
 Compile these programs as follows: 
 
-gcc -o echoServer echoServer.c 
-gcc -o echoClient echoClient.c
+All: make all
+Client: make client
+Server: make server
 
 ACKNOWLEDGEMENT: These programs are a modification of the ECHO server and
 ECHO client programs presented in the book `Internetworking with TCP/IP',
